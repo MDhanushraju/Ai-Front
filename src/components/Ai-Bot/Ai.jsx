@@ -311,7 +311,7 @@ function AiBot({ onLogout }) {
     return false;
   };
 
-  const getVoiceCommand = (text, confidence) => {
+  const getVoiceCommand = (text) => {
     const normalized = normalizeVoiceCommand(text);
     if (!normalized) return null;
 
@@ -322,11 +322,17 @@ function AiBot({ onLogout }) {
 
     if (!hasStop && !hasPause && !hasResume) return null;
 
-    // For stop/cancel we accept immediately (even low confidence) because user intent is urgent.
+    // Stop is always highest priority (urgent).
     if (hasStop) return 'stop';
 
-    // For pause/resume, keep a small confidence gate if provided.
-    if (typeof confidence === 'number' && confidence < 0.35) return null;
+    // For pause vs resume in the same phrase, use the last one (most recent intent).
+    const lastPause = normalized.lastIndexOf('pause');
+    const lastResume = Math.max(
+      normalized.lastIndexOf('resume'),
+      normalized.lastIndexOf('continue'),
+      normalized.lastIndexOf('start')
+    );
+    if (hasPause && hasResume) return lastResume > lastPause ? 'resume' : 'pause';
     if (hasPause) return 'pause';
     if (hasResume) return 'resume';
 

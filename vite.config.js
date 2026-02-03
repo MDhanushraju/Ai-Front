@@ -10,6 +10,7 @@ export default defineConfig({
       },
     }),
   ],
+  base: '/Ai-bot/',
   server: {
     proxy: {
       '/nvidia': {
