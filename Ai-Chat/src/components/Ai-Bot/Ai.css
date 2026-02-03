@@ -2201,17 +2201,7 @@
 
 /* move the ⋯ toggle button slightly left */
 .ai-menu-trigger{
-  right: 24px !important;
-}
-
-/* move AI (left) chat block 20px to the right */
-.ai-message-wrapper{
-  margin-left: 20px !important;
-}
-
-/* move USER (right) chat block 20px to the left */
-.user-message-wrapper{
-  margin-right: 20px !important;
+  right: 12px !important;
 }
 
 .date-separator{
@@ -2222,6 +2212,15 @@
 
 .message-label{
   color:rgba(255,255,255,.65) !important;
+}
+
+/* USER REQUEST: offset chat bubbles */
+.ai-message-wrapper{
+  transform: translateX(20px) !important; /* move AI chat right */
+}
+
+.user-message-wrapper{
+  transform: translateX(-20px) !important; /* move user chat left */
 }
 
 .user-bubble{
@@ -2257,4 +2256,23 @@
 
 .send-button svg path{
   stroke:#7c3aed !important;
+}
+
+@keyframes voiceButtonBlink{
+  0%, 100%{
+    box-shadow: 0 0 0 0 rgba(255,255,255,.0);
+    background: rgba(255,255,255,.10);
+  }
+  50%{
+    box-shadow: 0 0 0 6px rgba(255,255,255,.18);
+    background: rgba(255,255,255,.18);
+  }
+}
+
+.voice-button--active{
+  animation: voiceButtonBlink 0.95s ease-in-out infinite !important;
+}
+
+.voice-button--listening{
+  animation: voiceButtonBlink 0.65s ease-in-out infinite !important;
 }

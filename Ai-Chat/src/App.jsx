@@ -1,22 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Login from './components/Login/Login';
 import Signup from './components/signup/Signup';
 import AiBot from './components/Ai-Bot/Ai';
 import './App.css';
 
 function App() {
-  const [currentScreen, setCurrentScreen] = useState('login'); // 'login' or 'signup'
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [username, setUsername] = useState('');
-
-  // Check if user is already logged in (from localStorage)
-  useEffect(() => {
-    const savedUsername = localStorage.getItem('username');
-    if (savedUsername) {
-      setUsername(savedUsername);
-      setIsLoggedIn(true);
-    }
-  }, []);
+  const [currentScreen, setCurrentScreen] = useState('login');
+  const [username, setUsername] = useState(() => localStorage.getItem('username') || '');
+  const [isLoggedIn, setIsLoggedIn] = useState(() => Boolean(localStorage.getItem('username')));
 
   const handleSwitchToSignup = () => {
     setCurrentScreen('signup');
@@ -39,7 +30,6 @@ function App() {
     setCurrentScreen('login');
   };
 
-  // If logged in, show AI Bot component
   if (isLoggedIn) {
     return <AiBot username={username} onLogout={handleLogout} />;
   }

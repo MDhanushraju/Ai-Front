@@ -43,27 +43,34 @@ function Signup({ onSwitchToLogin }) {
     setIsLoading(true);
 
     try {
-      const username = email.trim();
+      const username = email.trim().toLowerCase();
+
       const raw = localStorage.getItem('users');
       const users = raw ? JSON.parse(raw) : [];
+      const safeUsers = Array.isArray(users) ? users : [];
 
-      const alreadyExists = users.some((u) => u?.username === username);
-      if (alreadyExists) {
-        alert('User already exists. Please Log In.');
+      const exists = safeUsers.some((u) => (u?.username ?? '').toLowerCase() === username);
+      if (exists) {
+        alert('Account already exists. Please login.');
         onSwitchToLogin();
         return;
       }
 
       const nextUsers = [
-        ...users,
-        { username, password, fullName: fullName.trim() },
+        ...safeUsers,
+        {
+          username,
+          fullName: fullName.trim(),
+          password,
+        },
       ];
+
       localStorage.setItem('users', JSON.stringify(nextUsers));
+      await new Promise((resolve) => setTimeout(resolve, 400));
 
       alert('Account created successfully! Please login.');
       onSwitchToLogin();
 
-      // Clear signup form
       setFullName('');
       setEmail('');
       setPassword('');

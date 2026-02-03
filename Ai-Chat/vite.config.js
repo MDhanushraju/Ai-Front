@@ -10,4 +10,14 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    proxy: {
+      '/nvidia': {
+        target: 'https://integrate.api.nvidia.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/nvidia/, ''),
+      },
+    },
+  },
 })

@@ -8,7 +8,6 @@ function Login({ onSwitchToSignup, onLoginSuccess }) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleBackClick = () => {
-    // Add your back navigation logic here
     console.log('Back from login');
   };
 
@@ -27,26 +26,62 @@ function Login({ onSwitchToSignup, onLoginSuccess }) {
     setIsLoading(true);
 
     try {
-      const raw = localStorage.getItem('users');
-      const users = raw ? JSON.parse(raw) : [];
+      const normalizedEmail = email.trim().toLowerCase();
 
-      const found = users.find(
-        (u) => u?.username === email.trim() && u?.password === password
-      );
+      let backendUsername = '';
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 6000);
 
-      if (!found) {
-        alert('User not found. Please Sign Up first.');
+        const response = await fetch('http://localhost:8080/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: normalizedEmail, password }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(t);
+
+        const data = await response.json().catch(() => ({}));
+        const ok = Boolean(data?.success);
+        if (ok) {
+          backendUsername = (data?.username || data?.user || normalizedEmail).toString();
+        }
+      } catch (err) {
+        console.warn('Backend login unavailable, using local login.', err);
+      }
+
+      
+      let localUsername = '';
+      if (!backendUsername) {
+        try {
+          const raw = localStorage.getItem('users');
+          const users = raw ? JSON.parse(raw) : [];
+          const safeUsers = Array.isArray(users) ? users : [];
+
+          const match = safeUsers.find(
+            (u) => (u?.username ?? '').toLowerCase() === normalizedEmail
+          );
+          if (match && match.password === password) {
+            localUsername = match.username;
+          }
+        } catch (err) {
+          console.warn('Local users storage is invalid.', err);
+        }
+      }
+
+      const finalUsername = (backendUsername || localUsername || normalizedEmail).trim();
+
+      if (!finalUsername) {
+        alert('Login failed: invalid username');
         return;
       }
 
-      // Store current user for session
-      localStorage.setItem('username', found.username);
-
-      // Open AI page (App.jsx will render AiBot when isLoggedIn=true)
-      onLoginSuccess?.(found.username);
+      localStorage.setItem('username', finalUsername);
+      onLoginSuccess?.(finalUsername);
     } catch (error) {
       console.error('Login error:', error);
-      alert('Login failed. Please try again.');
+      alert('Login failed. Please check your connection.');
     } finally {
       setIsLoading(false);
     }

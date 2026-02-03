@@ -1,4 +1,3 @@
-// Wrapper that uses the Gemini snippet-based API file.
 import { geminiGenerateText } from "./geminiApi";
 
 export async function generateGeminiReply(prompt) {
