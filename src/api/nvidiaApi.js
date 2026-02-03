@@ -58,7 +58,8 @@ export async function nvidiaGenerateText(
       throw new Error(`${msg}${extra} (HTTP ${resp.status})`);
     }
 
-    return (data?.text ?? '').toString().trim();
+    const text = data?.text ?? data?.choices?.[0]?.message?.content ?? '';
+    return (text ?? '').toString().trim();
   } catch (err) {
     // AbortController cancels are expected (topic switch / barge-in).
     if (err?.name === 'AbortError') throw err;
@@ -115,6 +116,15 @@ export async function nvidiaGenerateTextStream(
       (typeof data?.details === 'string' ? data.details : '');
     const extra = detailsMsg ? ` | ${String(detailsMsg).slice(0, 220)}` : '';
     throw new Error(`${msg}${extra} (HTTP ${resp.status})`);
+  }
+
+  // Backend may return a single JSON body (non-stream) instead of SSE
+  const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+  if (contentType.includes('application/json')) {
+    const data = await resp.json().catch(() => ({}));
+    const text = (data?.text ?? data?.choices?.[0]?.message?.content ?? '').toString().trim();
+    if (text && onDelta) onDelta(text, { full: text });
+    return text;
   }
 
   if (!resp.body) throw new Error('Streaming not supported by this browser.');

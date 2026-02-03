@@ -595,17 +595,17 @@ function AiBot({ onLogout }) {
       }
 
       requestAbortRef.current = null;
-      const finalAi = (aiText || '...').toString().trim() || '...';
+      const finalAi = (aiText || '').toString().trim();
       // We have the answer now; no longer "thinking".
       isLoadingRef.current = false;
-      conversationRef.current.push({ role: 'assistant', content: finalAi });
+      conversationRef.current.push({ role: 'assistant', content: finalAi || '(No response)' });
       currentAiSpeechRef.current = finalAi;
 
       // Finish speaking: flush remaining buffer then wait for queued chunks.
       flushIfReady(true);
 
-      // If streaming produced little/no queued speech, speak the full text.
-      if (!spokeAnything) {
+      // If streaming produced little/no queued speech, speak the full text (never speak "...").
+      if (!spokeAnything && finalAi) {
         ttsActiveRef.current = true;
         startRecognition();
         setStatusText('Listening…');
