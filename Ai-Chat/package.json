@@ -3,8 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://mdhanushraju.github.io/Ai-bot/",
- 
+  "homepage": "https://mdhanushraju.github.io/Ai-Front/",
   "scripts": {
     "dev": "vite",
     "dev:backend": "npm run dev --prefix back",

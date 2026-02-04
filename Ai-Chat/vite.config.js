@@ -10,7 +10,7 @@ export default defineConfig({
       },
     }),
   ],
-  base: '/Ai-bot/',
+  base: '/Ai-Front/',
   server: {
     host: true,
     proxy: {
