@@ -1,17 +1,11 @@
-function getApiBase() {
-  if (import.meta.env.DEV) return '';
-  const base = (import.meta.env.VITE_API_BASE || 'http://localhost:8081').toString().trim();
-  return base.replace(/\/$/, '');
-}
-
-export const API_BASE = getApiBase();
+// Frontend calls backend at localhost:8081 (via Vite proxy in dev: /api, /health, /login)
+const API_BASE = import.meta.env.DEV ? '' : 'http://localhost:8081';
 const BACKEND_URL = (API_BASE || '') + '/api/nvidia/chat';
+export { API_BASE };
 
 function extractSseDelta(json) {
-  // OpenAI-style streaming: choices[0].delta.content
   const delta = json?.choices?.[0]?.delta?.content;
   if (typeof delta === 'string') return delta;
-  // Some providers may stream full message chunks
   const msg = json?.choices?.[0]?.message?.content;
   if (typeof msg === 'string') return msg;
   return '';
@@ -35,9 +29,7 @@ export async function nvidiaGenerateText(
   try {
     const resp = await fetch(BACKEND_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       signal,
       body: JSON.stringify({
         model,
@@ -68,21 +60,11 @@ export async function nvidiaGenerateText(
     const text = data?.text ?? data?.choices?.[0]?.message?.content ?? '';
     return (text ?? '').toString().trim();
   } catch (err) {
-    // AbortController cancels are expected (topic switch / barge-in).
     if (err?.name === 'AbortError') throw err;
     if (typeof err?.message === 'string' && err.message.toLowerCase().includes('aborted')) throw err;
-
-    let hint = '';
-    if (/failed to fetch|networkerror|connection refused/i.test(err?.message ?? '')) {
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent ?? '');
-      const isLive = typeof window !== 'undefined' && !/localhost|127\.0\.0\.1/.test(window.location?.hostname ?? '');
-      if (isMobile || isLive)
-        hint =
-          ' On mobile/live: use the app from your PC (same WiFi)—open the "Network" URL shown when you run npm run dev, and start the backend (cd ai-chat-back && npm run dev).';
-      else
-        hint = ' Start the backend: cd ai-chat-back && npm run dev';
-    }
-    throw new Error((err?.message || 'Network error (failed to fetch).') + hint);
+    throw new Error(
+      err?.message || 'Network error. Start the backend: cd Front/React/Ai-Chat/back && npm run dev'
+    );
   }
 }
 
@@ -101,9 +83,7 @@ export async function nvidiaGenerateTextStream(
 ) {
   const resp = await fetch(BACKEND_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     signal,
     body: JSON.stringify({
       model,
@@ -132,7 +112,6 @@ export async function nvidiaGenerateTextStream(
     throw new Error(`${msg}${extra} (HTTP ${resp.status})`);
   }
 
-  // Backend may return a single JSON body (non-stream) instead of SSE
   const contentType = (resp.headers.get('content-type') || '').toLowerCase();
   if (contentType.includes('application/json')) {
     const data = await resp.json().catch(() => ({}));
@@ -158,14 +137,9 @@ export async function nvidiaGenerateTextStream(
 
     for (const lineRaw of lines) {
       const line = lineRaw.trim();
-      if (!line) continue;
-      if (!line.startsWith('data:')) continue;
-
+      if (!line || !line.startsWith('data:')) continue;
       const payload = line.slice(5).trim();
-      if (!payload) continue;
-      if (payload === '[DONE]') {
-        return full.trim();
-      }
+      if (!payload || payload === '[DONE]') continue;
 
       let json;
       try {
@@ -173,7 +147,6 @@ export async function nvidiaGenerateTextStream(
       } catch {
         continue;
       }
-
       const delta = extractSseDelta(json);
       if (!delta) continue;
       full += delta;
@@ -187,4 +160,3 @@ export async function nvidiaGenerateTextStream(
 
   return full.trim();
 }
-

@@ -10,10 +10,9 @@ export default defineConfig({
       },
     }),
   ],
-  base: '/Ai-bot/',
+  base: '/Ai-Front/',
   server: {
     host: true,
-    // Proxy API calls to backend (ai-chat-back folder, runs on port 8081)
     proxy: {
       '/nvidia': {
         target: 'https://integrate.api.nvidia.com',

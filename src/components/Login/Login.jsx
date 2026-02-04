@@ -33,33 +33,27 @@ function Login({ onSwitchToSignup, onLoginSuccess }) {
       try {
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 6000);
-
         const response = await fetch((API_BASE || '') + '/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: normalizedEmail, password }),
           signal: controller.signal,
         });
-
         clearTimeout(t);
-
         const data = await response.json().catch(() => ({}));
-        const ok = Boolean(data?.success);
-        if (ok) {
+        if (Boolean(data?.success)) {
           backendUsername = (data?.username || data?.user || normalizedEmail).toString();
         }
       } catch (err) {
         console.warn('Backend login unavailable, using local login.', err);
       }
 
-      
       let localUsername = '';
       if (!backendUsername) {
         try {
           const raw = localStorage.getItem('users');
           const users = raw ? JSON.parse(raw) : [];
           const safeUsers = Array.isArray(users) ? users : [];
-
           const match = safeUsers.find(
             (u) => (u?.username ?? '').toLowerCase() === normalizedEmail
           );
