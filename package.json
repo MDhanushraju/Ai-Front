@@ -7,6 +7,7 @@
  
   "scripts": {
     "dev": "vite",
+    "dev:backend": "npm run dev --prefix ../../../ai-chat-back",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",

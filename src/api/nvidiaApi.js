@@ -1,4 +1,11 @@
-const BACKEND_URL = 'http://localhost:8081/api/nvidia/chat';
+function getApiBase() {
+  if (import.meta.env.DEV) return '';
+  const base = (import.meta.env.VITE_API_BASE || 'http://localhost:8081').toString().trim();
+  return base.replace(/\/$/, '');
+}
+
+export const API_BASE = getApiBase();
+const BACKEND_URL = (API_BASE || '') + '/api/nvidia/chat';
 
 function extractSseDelta(json) {
   // OpenAI-style streaming: choices[0].delta.content
@@ -65,10 +72,17 @@ export async function nvidiaGenerateText(
     if (err?.name === 'AbortError') throw err;
     if (typeof err?.message === 'string' && err.message.toLowerCase().includes('aborted')) throw err;
 
-    throw new Error(
-      err?.message ||
-        'Network error (failed to fetch). Start the backend in Front/React/Ai-Chat/back (PORT 8081).'
-    );
+    let hint = '';
+    if (/failed to fetch|networkerror|connection refused/i.test(err?.message ?? '')) {
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent ?? '');
+      const isLive = typeof window !== 'undefined' && !/localhost|127\.0\.0\.1/.test(window.location?.hostname ?? '');
+      if (isMobile || isLive)
+        hint =
+          ' On mobile/live: use the app from your PC (same WiFi)—open the "Network" URL shown when you run npm run dev, and start the backend (cd ai-chat-back && npm run dev).';
+      else
+        hint = ' Start the backend: cd ai-chat-back && npm run dev';
+    }
+    throw new Error((err?.message || 'Network error (failed to fetch).') + hint);
   }
 }
 

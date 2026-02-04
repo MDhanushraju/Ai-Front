@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import './AiCentral.css';
-import { nvidiaGenerateText, nvidiaGenerateTextStream } from '../../api/nvidiaApi';
+import { API_BASE, nvidiaGenerateText, nvidiaGenerateTextStream } from '../../api/nvidiaApi';
 import {
   createSpeechRecognition,
   isSpeechRecognitionSupported,
@@ -74,7 +74,7 @@ function AiBot({ onLogout }) {
     }
 
     const controller = new AbortController();
-    fetch('http://localhost:8081/health', { signal: controller.signal })
+    fetch((API_BASE || '') + '/health', { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then(() => setBackendStatus('ok'))
       .catch(() => setBackendStatus('down'));
@@ -406,7 +406,9 @@ function AiBot({ onLogout }) {
   };
 
   const enqueueSpeakChunk = (chunk, { isLast = false } = {}) => {
-    const text = (chunk ?? '').toString().trim();
+    let text = (chunk ?? '').toString().trim();
+    // Never speak "..." or "dot dot dot" (live/production can get empty response when backend is unreachable)
+    if (/^[.\s]+$/.test(text) || /^(dot\s*)+$/i.test(text)) text = '';
     if (!text) {
       if (isLast) {
         ttsQueueRef.current = ttsQueueRef.current.then(() => {
