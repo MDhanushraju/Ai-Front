@@ -10,7 +10,9 @@ export default defineConfig({
       },
     }),
   ],
+  base: '/Ai-bot/',
   server: {
+    host: true,
     proxy: {
       '/nvidia': {
         target: 'https://integrate.api.nvidia.com',
@@ -18,6 +20,9 @@ export default defineConfig({
         secure: true,
         rewrite: (path) => path.replace(/^\/nvidia/, ''),
       },
+      '/api': { target: 'http://localhost:8081', changeOrigin: true },
+      '/health': { target: 'http://localhost:8081', changeOrigin: true },
+      '/login': { target: 'http://localhost:8081', changeOrigin: true },
     },
   },
 })

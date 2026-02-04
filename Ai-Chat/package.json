@@ -1,13 +1,18 @@
 {
-  "name": "package.json",
+  "name": "ai-chat",
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "homepage": "https://mdhanushraju.github.io/Ai-bot/",
+ 
   "scripts": {
     "dev": "vite",
+    "dev:backend": "npm run dev --prefix back",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
     "@google/genai": "^1.38.0",

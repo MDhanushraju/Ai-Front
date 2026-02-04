@@ -30,7 +30,7 @@ try {
 function getNvidiaApiKey() {
   return (
     process.env.NVIDIA_API_KEY ||
-    process.env.VITE_NVIDIA_API_KEY || // fallback if you copy the same key name
+    process.env.VITE_NVIDIA_API_KEY ||
     fileNvidiaApiKey ||
     ''
   );
@@ -38,8 +38,8 @@ function getNvidiaApiKey() {
 
 async function nvidiaChatCompletions({ apiKey, model, messages, params }) {
   const url = 'https://integrate.api.nvidia.com/v1/chat/completions';
-  const baseTimeoutMs = Number(process.env.NVIDIA_TIMEOUT_MS || 30000);
-  const retryAttempts = Math.max(1, Number(process.env.NVIDIA_RETRY_ATTEMPTS || 2)); // total attempts
+  const baseTimeoutMs = Number(process.env.NVIDIA_TIMEOUT_MS || 60000);
+  const retryAttempts = Math.max(1, Number(process.env.NVIDIA_RETRY_ATTEMPTS || 2));
 
   const isRetryableStatus = (status) =>
     status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
@@ -80,15 +80,8 @@ async function nvidiaChatCompletions({ apiKey, model, messages, params }) {
         e.status = 504;
         throw e;
       }
-      // Network/TLS/DNS failures (no HTTP status). Surface a clearer error to the client.
       const e = new Error(`Upstream network error calling NVIDIA: ${err?.message || 'fetch failed'}`);
       e.status = 502;
-      e.details = {
-        name: err?.name,
-        message: err?.message,
-        code: err?.code,
-        cause: err?.cause?.message,
-      };
       throw e;
     } finally {
       clearTimeout(t);
@@ -106,27 +99,30 @@ async function nvidiaChatCompletions({ apiKey, model, messages, params }) {
 
     const msg = data?.error?.message || data?.message || `NVIDIA request failed (HTTP ${resp.status})`;
     if (attempt < retryAttempts && isRetryableStatus(resp.status)) {
-      // small backoff before retry
       await new Promise((r) => setTimeout(r, 400 + Math.floor(Math.random() * 500)));
       continue;
     }
 
-    const err = new Error(msg);
-    err.status = resp.status;
-    err.details = data || { raw: rawText?.slice?.(0, 1000) };
-    throw err;
+    const e = new Error(msg);
+    e.status = resp.status;
+    throw e;
   }
 
-  const err = new Error('NVIDIA request failed after retries');
-  err.status = 502;
-  throw err;
+  throw new Error('NVIDIA request failed after retries');
 }
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
 
-// Debug endpoint to confirm backend can read key (does NOT return full key)
+app.post('/login', (req, res) => {
+  const username = (req.body?.username ?? '').toString().trim();
+  if (!username) {
+    return res.status(400).json({ success: false, error: 'username required' });
+  }
+  res.json({ success: true, username });
+});
+
 app.get('/health/nvidia', (_req, res) => {
   const k = getNvidiaApiKey();
   res.json({
@@ -136,8 +132,6 @@ app.get('/health/nvidia', (_req, res) => {
   });
 });
 
-// POST /api/nvidia/chat
-// body: { prompt?: string, messages?: [{role,content}], model?: string, params?: {...} }
 app.post('/api/nvidia/chat', async (req, res) => {
   const apiKey = getNvidiaApiKey();
   if (!apiKey) {
@@ -145,8 +139,6 @@ app.post('/api/nvidia/chat', async (req, res) => {
   }
 
   const model = req.body?.model || 'meta/llama-4-maverick-17b-128e-instruct';
-  const stream = Boolean(req.body?.stream);
-
   let messages = req.body?.messages;
   const prompt = req.body?.prompt;
 
@@ -159,119 +151,23 @@ app.post('/api/nvidia/chat', async (req, res) => {
   }
 
   try {
-    if (stream) {
-      const url = 'https://integrate.api.nvidia.com/v1/chat/completions';
-      const controller = new AbortController();
-      const timeoutMs = Number(process.env.NVIDIA_STREAM_TIMEOUT_MS || 60000);
-      const t = setTimeout(() => controller.abort(), timeoutMs);
-
-      req.on('close', () => {
-        try {
-          controller.abort();
-        } catch {
-          // ignore
-        }
-      });
-
-      const params = req.body?.params;
-      const body = {
-        model,
-        messages,
-        max_tokens: params?.max_tokens ?? 96,
-        temperature: params?.temperature ?? 0.4,
-        top_p: params?.top_p ?? 0.9,
-        frequency_penalty: params?.frequency_penalty ?? 0.0,
-        presence_penalty: params?.presence_penalty ?? 0.0,
-        stream: true,
-      };
-
-      let upstream;
-      try {
-        upstream = await fetch(url, {
-          signal: controller.signal,
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            Accept: 'text/event-stream',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-        });
-      } catch (err) {
-        if (err?.name === 'AbortError') {
-          return res.status(504).json({ error: `NVIDIA stream timed out after ${timeoutMs}ms` });
-        }
-        return res.status(502).json({
-          error: `Upstream network error calling NVIDIA: ${err?.message || 'fetch failed'}`,
-          details: { name: err?.name, message: err?.message, code: err?.code, cause: err?.cause?.message },
-        });
-      } finally {
-        clearTimeout(t);
-      }
-
-      if (!upstream.ok) {
-        const raw = await upstream.text().catch(() => '');
-        let details = {};
-        try {
-          details = raw ? JSON.parse(raw) : {};
-        } catch {
-          details = { raw: raw?.slice?.(0, 1000) || '' };
-        }
-        const msg = details?.error?.message || details?.message || `NVIDIA request failed (HTTP ${upstream.status})`;
-        return res.status(upstream.status).json({ error: msg, details });
-      }
-
-      res.status(200);
-      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-      res.setHeader('Cache-Control', 'no-cache, no-transform');
-      res.setHeader('Connection', 'keep-alive');
-      res.flushHeaders?.();
-
-      const reader = upstream.body?.getReader?.();
-      if (!reader) {
-        return res.status(500).json({ error: 'Upstream stream not readable' });
-      }
-      const decoder = new TextDecoder();
-      try {
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          res.write(decoder.decode(value, { stream: true }));
-        }
-      } catch (err) {
-        try {
-          controller.abort();
-        } catch {
-          // ignore
-        }
-      } finally {
-        try {
-          res.end();
-        } catch {
-          return;
-        }
-      }
-      return;
-    }
-
     const data = await nvidiaChatCompletions({
       apiKey,
       model,
       messages,
       params: req.body?.params,
     });
-
-    const text = data?.choices?.[0]?.message?.content ?? '';
-    return res.json({ text });
+    const text = (data?.choices?.[0]?.message?.content ?? '').toString().trim();
+    res.json({ ...data, text });
   } catch (err) {
-    return res.status(err?.status || 500).json({
-      error: err?.message || 'Server error',
+    const status = err?.status ?? 502;
+    res.status(status).json({
+      error: err?.message || 'NVIDIA request failed',
       details: err?.details,
     });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`AI Chat backend running on port ${PORT}`);
+  console.log(`Ai-Chat backend listening on http://localhost:${PORT}`);
 });
-

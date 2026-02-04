@@ -1,18 +1,16 @@
 # AI Chat Backend
 
+Runs on http://localhost:8081. Used by the frontend for login and chat.
+
 ## Setup
 
-1. Create `back/.env` from `back/.env.example`
-2. Install deps:
-   - `npm install`
-3. Run:
-   - `npm run dev` (Node watch mode)
+1. Copy `.env.example` to `.env` or ensure `../.env` has `VITE_NVIDIA_API_KEY`.
+2. `npm install`
+3. `npm run dev`
 
 ## Endpoints
 
 - `GET /health`
+- `POST /login` – body: `{ username, password }`, returns `{ success, username }`
+- `GET /health/nvidia`
 - `POST /api/nvidia/chat`
-  - Body:
-    - `prompt` (string) OR `messages` (array of `{ role, content }`)
-    - optional: `model`, `params`
-

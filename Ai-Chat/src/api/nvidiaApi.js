@@ -1,10 +1,11 @@
-const BACKEND_URL = 'http://localhost:8081/api/nvidia/chat';
+// Frontend calls backend at localhost:8081 (via Vite proxy in dev: /api, /health, /login)
+const API_BASE = import.meta.env.DEV ? '' : 'http://localhost:8081';
+const BACKEND_URL = (API_BASE || '') + '/api/nvidia/chat';
+export { API_BASE };
 
 function extractSseDelta(json) {
-  // OpenAI-style streaming: choices[0].delta.content
   const delta = json?.choices?.[0]?.delta?.content;
   if (typeof delta === 'string') return delta;
-  // Some providers may stream full message chunks
   const msg = json?.choices?.[0]?.message?.content;
   if (typeof msg === 'string') return msg;
   return '';
@@ -28,9 +29,7 @@ export async function nvidiaGenerateText(
   try {
     const resp = await fetch(BACKEND_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       signal,
       body: JSON.stringify({
         model,
@@ -58,15 +57,13 @@ export async function nvidiaGenerateText(
       throw new Error(`${msg}${extra} (HTTP ${resp.status})`);
     }
 
-    return (data?.text ?? '').toString().trim();
+    const text = data?.text ?? data?.choices?.[0]?.message?.content ?? '';
+    return (text ?? '').toString().trim();
   } catch (err) {
-    // AbortController cancels are expected (topic switch / barge-in).
     if (err?.name === 'AbortError') throw err;
     if (typeof err?.message === 'string' && err.message.toLowerCase().includes('aborted')) throw err;
-
     throw new Error(
-      err?.message ||
-        'Network error (failed to fetch). Start the backend in Front/React/Ai-Chat/back (PORT 8081).'
+      err?.message || 'Network error. Start the backend: cd Front/React/Ai-Chat/back && npm run dev'
     );
   }
 }
@@ -86,9 +83,7 @@ export async function nvidiaGenerateTextStream(
 ) {
   const resp = await fetch(BACKEND_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     signal,
     body: JSON.stringify({
       model,
@@ -117,6 +112,14 @@ export async function nvidiaGenerateTextStream(
     throw new Error(`${msg}${extra} (HTTP ${resp.status})`);
   }
 
+  const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+  if (contentType.includes('application/json')) {
+    const data = await resp.json().catch(() => ({}));
+    const text = (data?.text ?? data?.choices?.[0]?.message?.content ?? '').toString().trim();
+    if (text && onDelta) onDelta(text, { full: text });
+    return text;
+  }
+
   if (!resp.body) throw new Error('Streaming not supported by this browser.');
 
   const reader = resp.body.getReader();
@@ -134,14 +137,9 @@ export async function nvidiaGenerateTextStream(
 
     for (const lineRaw of lines) {
       const line = lineRaw.trim();
-      if (!line) continue;
-      if (!line.startsWith('data:')) continue;
-
+      if (!line || !line.startsWith('data:')) continue;
       const payload = line.slice(5).trim();
-      if (!payload) continue;
-      if (payload === '[DONE]') {
-        return full.trim();
-      }
+      if (!payload || payload === '[DONE]') continue;
 
       let json;
       try {
@@ -149,7 +147,6 @@ export async function nvidiaGenerateTextStream(
       } catch {
         continue;
       }
-
       const delta = extractSseDelta(json);
       if (!delta) continue;
       full += delta;
@@ -163,4 +160,3 @@ export async function nvidiaGenerateTextStream(
 
   return full.trim();
 }
-

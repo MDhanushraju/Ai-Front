@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import './AiCentral.css';
-import { nvidiaGenerateText, nvidiaGenerateTextStream } from '../../api/nvidiaApi';
+import { API_BASE, nvidiaGenerateText, nvidiaGenerateTextStream } from '../../api/nvidiaApi';
 import {
   createSpeechRecognition,
   isSpeechRecognitionSupported,
@@ -74,7 +74,7 @@ function AiBot({ onLogout }) {
     }
 
     const controller = new AbortController();
-    fetch('http://localhost:8081/health', { signal: controller.signal })
+    fetch((API_BASE || '') + '/health', { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then(() => setBackendStatus('ok'))
       .catch(() => setBackendStatus('down'));
@@ -311,7 +311,7 @@ function AiBot({ onLogout }) {
     return false;
   };
 
-  const getVoiceCommand = (text, confidence) => {
+  const getVoiceCommand = (text) => {
     const normalized = normalizeVoiceCommand(text);
     if (!normalized) return null;
 
@@ -322,11 +322,17 @@ function AiBot({ onLogout }) {
 
     if (!hasStop && !hasPause && !hasResume) return null;
 
-    // For stop/cancel we accept immediately (even low confidence) because user intent is urgent.
+    // Stop is always highest priority (urgent).
     if (hasStop) return 'stop';
 
-    // For pause/resume, keep a small confidence gate if provided.
-    if (typeof confidence === 'number' && confidence < 0.35) return null;
+    // For pause vs resume in the same phrase, use the last one (most recent intent).
+    const lastPause = normalized.lastIndexOf('pause');
+    const lastResume = Math.max(
+      normalized.lastIndexOf('resume'),
+      normalized.lastIndexOf('continue'),
+      normalized.lastIndexOf('start')
+    );
+    if (hasPause && hasResume) return lastResume > lastPause ? 'resume' : 'pause';
     if (hasPause) return 'pause';
     if (hasResume) return 'resume';
 
@@ -400,7 +406,9 @@ function AiBot({ onLogout }) {
   };
 
   const enqueueSpeakChunk = (chunk, { isLast = false } = {}) => {
-    const text = (chunk ?? '').toString().trim();
+    let text = (chunk ?? '').toString().trim();
+    // Never speak "..." or "dot dot dot" (live/production can get empty response when backend is unreachable)
+    if (/^[.\s]+$/.test(text) || /^(dot\s*)+$/i.test(text)) text = '';
     if (!text) {
       if (isLast) {
         ttsQueueRef.current = ttsQueueRef.current.then(() => {
@@ -589,17 +597,17 @@ function AiBot({ onLogout }) {
       }
 
       requestAbortRef.current = null;
-      const finalAi = (aiText || '...').toString().trim() || '...';
+      const finalAi = (aiText || '').toString().trim();
       // We have the answer now; no longer "thinking".
       isLoadingRef.current = false;
-      conversationRef.current.push({ role: 'assistant', content: finalAi });
+      conversationRef.current.push({ role: 'assistant', content: finalAi || '(No response)' });
       currentAiSpeechRef.current = finalAi;
 
       // Finish speaking: flush remaining buffer then wait for queued chunks.
       flushIfReady(true);
 
-      // If streaming produced little/no queued speech, speak the full text.
-      if (!spokeAnything) {
+      // If streaming produced little/no queued speech, speak the full text (never speak "...").
+      if (!spokeAnything && finalAi) {
         ttsActiveRef.current = true;
         startRecognition();
         setStatusText('Listening…');
