@@ -1,5 +1,7 @@
-// Frontend calls backend at localhost:8081 (via Vite proxy in dev: /api, /health, /login)
-const API_BASE = import.meta.env.DEV ? '' : 'http://localhost:8081';
+// Dev: use Vite proxy (relative URLs). Production: use VITE_API_BASE or localhost for local build
+const API_BASE = import.meta.env.DEV
+  ? ''
+  : (import.meta.env.VITE_API_BASE || 'http://localhost:8081').toString().trim().replace(/\/$/, '');
 const BACKEND_URL = (API_BASE || '') + '/api/nvidia/chat';
 export { API_BASE };
 
@@ -63,7 +65,7 @@ export async function nvidiaGenerateText(
     if (err?.name === 'AbortError') throw err;
     if (typeof err?.message === 'string' && err.message.toLowerCase().includes('aborted')) throw err;
     throw new Error(
-      err?.message || 'Network error. Start the backend: cd Front/React/Ai-Chat/back && npm run dev'
+      err?.message || 'Network error. Start the backend: cd Front/React/Ai-Chat/back && npm install && npm run dev'
     );
   }
 }

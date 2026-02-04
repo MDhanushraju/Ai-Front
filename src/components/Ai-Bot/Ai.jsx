@@ -597,10 +597,15 @@ function AiBot({ onLogout }) {
       }
 
       requestAbortRef.current = null;
-      const finalAi = (aiText || '').toString().trim();
+      let finalAi = (aiText || '').toString().trim();
       // We have the answer now; no longer "thinking".
       isLoadingRef.current = false;
-      conversationRef.current.push({ role: 'assistant', content: finalAi || '(No response)' });
+      // When backend/model returns empty, give user clear feedback (no silent "no output").
+      const emptyFallback = "I didn't get a response. Please try again.";
+      if (!finalAi) {
+        finalAi = emptyFallback;
+      }
+      conversationRef.current.push({ role: 'assistant', content: finalAi });
       currentAiSpeechRef.current = finalAi;
 
       // Finish speaking: flush remaining buffer then wait for queued chunks.

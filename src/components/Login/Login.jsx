@@ -41,7 +41,7 @@ function Login({ onSwitchToSignup, onLoginSuccess }) {
         });
         clearTimeout(t);
         const data = await response.json().catch(() => ({}));
-        if (Boolean(data?.success)) {
+        if (data?.success) {
           backendUsername = (data?.username || data?.user || normalizedEmail).toString();
         }
       } catch (err) {
